@@ -8,9 +8,9 @@ const pointColor = "#5232B9";
 
 // svg
 const svg = d3.select("#svg-container").append("svg").attr("id", "svg");
-const width = parseInt(d3.select("#svg-container").style("width"));
-const height = parseInt(d3.select("#svg-container").style("height"));
-const margin = { top: 65, right: 50, bottom: 65, left: 50 };
+let width = parseInt(d3.select("#svg-container").style("width"));
+let height = parseInt(d3.select("#svg-container").style("height"));
+let margin = { top: 65, right: 50, bottom: 65, left: 50 };
 
 // group 방사형 데이터 전체를 g로 그룹화해서 0,0을 svg의 중앙으로 옮기는 작업
 const g = svg
@@ -55,10 +55,34 @@ let selectedPlayer;
 let radiusAxis, angleAxis, labels;
 let path;
 
+let players;
+let selectedName = "H. Son";
+
 d3.json("data/fifa23_maleplayers.json").then((raw_data) => {
   data = raw_data.filter((d) => d.overall > 85);
-  selectedPlayer = data.filter((d) => d.short_name === "H. Son")[0];
-  console.log(selectedPlayer);
+
+  players = [...new Set(data.map((d) => d.short_name))];
+  // console.log(players);
+  selectedPlayer = data.filter((d) => d.short_name == selectedName)[0];
+  // console.log(selectedPlayer);
+
+  const dropdown = document.getElementById("options");
+
+  players.map((d) => {
+    const option = document.createElement("option");
+    option.value = d;
+    // 실제로 option에 넣은 값은 d(data), 위에서 d를 short_name으로 정의함
+    option.innerHTML = d;
+    // innerHTML은 보이는 텍스트
+    option.selected = d === selectedName ? true : false;
+    dropdown.appendChild(option);
+  });
+
+  dropdown.addEventListener("change", function () {
+    selectedName = dropdown.value;
+    updatePlayer();
+    // console.log(selectedName);
+  });
 
   // axis
   radiusAxis = g
@@ -104,6 +128,8 @@ d3.json("data/fifa23_maleplayers.json").then((raw_data) => {
     .attr("stroke", pointColor)
     .attr("stroke-width", 1.3)
     .style("fill-opacity", 0.1);
+
+  d3.select("#player-name").text(selectedPlayer.long_name);
 });
 
 // function
@@ -116,3 +142,45 @@ const getYpos = (dist, index) => {
   //radius * sin (theta)
   return radiusScale(dist) * Math.sin(angleScale(index) - Math.PI / 2);
 };
+
+// Update
+// 애니메이션 넣기 첫 단계!
+const updatePlayer = () => {
+  selectedPlayer = data.filter((d) => d.short_name == selectedName)[0];
+
+  radarLine.radius((d) => radiusScale(selectedPlayer[d]));
+  // console.log(selectedPlayer);
+
+  path.transition().duration(600).attr("d", radarLine);
+
+  d3.select("#player-name").text(selectedPlayer.long_name);
+};
+
+// Resize
+window.addEventListener("resize", () => {
+  width = parseInt(d3.select("#svg-container").style("width"));
+  height = parseInt(d3.select("#svg-container").style("height"));
+
+  g.attr("transform", `translate(${width / 2}, ${height / 2})`);
+  // --> svg는 resize가 되는데 그룹으로 묶어서 가운데 옮겨놓은 그 그룹은 resize 적용이 안 돼서 해주는 것
+
+  minLen = d3.min([height / 2 - margin.top, width / 2 - margin.right]);
+  radiusScale.range([0, minLen]);
+
+  // axis update
+  radiusAxis.attr("r", (d) => radiusScale(d));
+
+  angleAxis
+    .attr("x2", (d, i) => getXpos(100, i))
+    .attr("y2", (d, i) => getYpos(100, i));
+
+  // path update
+  radarLine.radius((d) => radiusScale(selectedPlayer[d]));
+
+  path.attr("d", radarLine);
+
+  // label update
+  labels
+    .attr("x", (d, i) => getXpos(116, i))
+    .attr("y", (d, i) => getYpos(116, i));
+});
